@@ -1,0 +1,52 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-html playwright pytest-playwright
+
+    - name: Install browsers
+      run: |
+        playwright install
+        playwright install-deps
+
+    - name: Start Flask application
+      run: |
+        python app/app.py &
+        sleep 10
+
+    - name: Wait for app to start
+      run: |
+        timeout 30s bash -c 'until curl -f http://localhost:5000/; do sleep 1; done'
+
+    - name: Run UI tests
+      run: |
+        mkdir -p reports
+        pytest tests/test_ui.py --base-url=http://localhost:5000 --html=reports/ui_report.html --self-contained-html
+
+    - name: Upload test report
+      uses: actions/upload-artifact@v3
+      with:
+        name: ui-test-report
+        path: reports/
+        retention-days: 30
